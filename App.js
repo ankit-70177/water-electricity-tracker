@@ -1,3 +1,5 @@
+import { LineChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +11,18 @@ import {
   TextInput,
   Pressable,
 } from 'react-native';
+
+const getTodayDate = () => {
+  const date = new Date();
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+
 
 export default function App() {
 const [waterUsage, setWaterUsage] = useState(60);
@@ -23,6 +37,9 @@ const [dataLoaded, setDataLoaded] = useState(false);
 
 const [waterGoal, setWaterGoal] = useState(150);
 const [electricityGoal, setElectricityGoal] = useState(5);
+const [trackingDate, setTrackingDate] = useState(getTodayDate());
+
+const screenWidth = Dimensions.get('window').width;
 
 useEffect(() => {
   const loadData = async () => {
@@ -30,17 +47,38 @@ useEffect(() => {
       const savedData = await AsyncStorage.getItem('usageData');
 
       if (savedData !== null) {
-        const data = JSON.parse(savedData);
+  const data = JSON.parse(savedData);
+  
+  const today = getTodayDate();
+  // const today = '2099-01-01';
 
-        setWaterUsage(data.waterUsage ?? 60);
-        setElectricityUsage(data.electricityUsage ?? 2.4);
+  if (data.trackingDate !== today) {
+    // A new day has started
+    setWaterUsage(0);
+    setElectricityUsage(0);
 
-        setWaterGoal(data.waterGoal ?? 150);
-        setElectricityGoal(data.electricityGoal ?? 5);
+    // Keep the previous history
+    setWaterHistory(data.waterHistory ?? []);
+    setElectricityHistory(data.electricityHistory ?? []);
 
-        setWaterHistory(data.waterHistory ?? []);
-        setElectricityHistory(data.electricityHistory ?? []);
-      }
+    setWaterGoal(data.waterGoal ?? 150);
+    setElectricityGoal(data.electricityGoal ?? 5);
+
+    setTrackingDate(today);
+  } else {
+    // Same day: restore everything
+    setWaterUsage(data.waterUsage ?? 60);
+    setElectricityUsage(data.electricityUsage ?? 2.4);
+
+    setWaterGoal(data.waterGoal ?? 150);
+    setElectricityGoal(data.electricityGoal ?? 5);
+
+    setWaterHistory(data.waterHistory ?? []);
+    setElectricityHistory(data.electricityHistory ?? []);
+
+    setTrackingDate(data.trackingDate ?? today);
+  }
+}
     } catch (error) {
       console.log('Error loading data:', error);
     } finally {
@@ -57,13 +95,14 @@ useEffect(() => {
   const saveData = async () => {
     try {
       const data = {
-        waterUsage,
-        electricityUsage,
-        waterGoal,
-        electricityGoal,
-        waterHistory,
-        electricityHistory,
-      };
+  waterUsage,
+  electricityUsage,
+  waterGoal,
+  electricityGoal,
+  waterHistory,
+  electricityHistory,
+  trackingDate,
+};
 
       await AsyncStorage.setItem('usageData', JSON.stringify(data));
     } catch (error) {
@@ -80,6 +119,7 @@ useEffect(() => {
   electricityGoal,
   waterHistory,
   electricityHistory,
+  trackingDate,
 ]);
 
 const waterPercentage = Math.round(
@@ -109,6 +149,42 @@ const electricityTip =
 
 const remainingWater = waterGoal - waterUsage;
 const remainingElectricity = electricityGoal - electricityUsage;
+
+const last7Days = Array.from({ length: 7 }, (_, index) => {
+  const date = new Date();
+  date.setDate(date.getDate() - (6 - index));
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  const dateKey = `${year}-${month}-${day}`;
+
+  return {
+    date: dateKey,
+    label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+  };
+});
+
+const weeklyWaterData = last7Days.map((day) =>
+  waterHistory
+    .filter((entry) => entry.date === day.date)
+    .reduce((total, entry) => total + Number(entry.amount), 0)
+);
+
+const weeklyElectricityData = last7Days.map((day) =>
+  electricityHistory
+    .filter((entry) => entry.date === day.date)
+    .reduce((total, entry) => total + Number(entry.amount), 0)
+);
+
+const weeklyWaterTotal = weeklyWaterData.reduce((sum, amount) => sum + amount, 0);
+
+const weeklyElectricityTotal = weeklyElectricityData.reduce(
+  (sum, amount) => sum + amount,
+  0
+);
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
@@ -184,17 +260,18 @@ const remainingElectricity = electricityGoal - electricityUsage;
   if (amount > 0) {
     setWaterUsage(waterUsage + amount);
 
-    setWaterHistory([
-      {
-        id: Date.now(),
-        amount: amount,
-        time: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      },
-      ...waterHistory,
-    ]);
+   setWaterHistory((prevHistory) => [
+  {
+    id: Date.now(),
+    amount: amount,
+    date: getTodayDate(),
+    time: new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  },
+  ...prevHistory,
+]);
 
     setWaterInput('');
   }
@@ -253,17 +330,18 @@ const remainingElectricity = electricityGoal - electricityUsage;
   if (amount > 0) {
     setElectricityUsage(electricityUsage + amount);
 
-    setElectricityHistory([
-      {
-        id: Date.now(),
-        amount: amount,
-        time: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      },
-      ...electricityHistory,
-    ]);
+   setElectricityHistory((prevHistory) => [
+  {
+    id: Date.now(),
+    amount: amount,
+    date: getTodayDate(),
+    time: new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  },
+  ...prevHistory,
+]);
 
     setElectricityInput('');
   }
@@ -384,7 +462,9 @@ const remainingElectricity = electricityGoal - electricityUsage;
         </Text>
       </View>
 
-      <Text style={styles.historyTime}>{entry.time}</Text>
+      <Text style={styles.historyTime}>
+  {entry.date} • {entry.time}
+</Text>
     </View>
   ))}
 
@@ -397,9 +477,83 @@ const remainingElectricity = electricityGoal - electricityUsage;
         </Text>
       </View>
 
-      <Text style={styles.historyTime}>{entry.time}</Text>
+      <Text style={styles.historyTime}>{entry.date} •{entry.time}</Text>
     </View>
   ))}
+
+{/* Weekly Analytics */}
+<View style={styles.analyticsSection}>
+  <Text style={styles.analyticsTitle}>Weekly Analytics 📊</Text>
+  <Text style={styles.analyticsSubtitle}>
+    Your consumption over the last 7 days
+  </Text>
+
+  {/* Weekly Water Total */}
+  <View style={styles.analyticsCard}>
+    <Text style={styles.analyticsCardTitle}>💧 Weekly Water Usage</Text>
+    <Text style={styles.analyticsTotal}>
+      {weeklyWaterTotal} L
+    </Text>
+
+    <LineChart
+      data={{
+        labels: last7Days.map((day) => day.label),
+        datasets: [{ data: weeklyWaterData }],
+      }}
+      width={screenWidth - 64}
+      height={220}
+      yAxisSuffix=" L"
+      chartConfig={{
+        backgroundColor: '#FFFFFF',
+        backgroundGradientFrom: '#FFFFFF',
+        backgroundGradientTo: '#FFFFFF',
+        decimalPlaces: 0,
+        color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`,
+        labelColor: (opacity = 1) => `rgba(80, 80, 80, ${opacity})`,
+        propsForDots: {
+          r: '5',
+          strokeWidth: '2',
+          stroke: '#2E7D32',
+        },
+      }}
+      bezier
+      style={styles.chart}
+    />
+  </View>
+
+  {/* Weekly Electricity Total */}
+  <View style={styles.analyticsCard}>
+    <Text style={styles.analyticsCardTitle}>⚡ Weekly Electricity Usage</Text>
+    <Text style={styles.analyticsTotal}>
+      {weeklyElectricityTotal.toFixed(2)} kWh
+    </Text>
+
+    <LineChart
+      data={{
+        labels: last7Days.map((day) => day.label),
+        datasets: [{ data: weeklyElectricityData }],
+      }}
+      width={screenWidth - 64}
+      height={220}
+      yAxisSuffix=" kWh"
+      chartConfig={{
+        backgroundColor: '#FFFFFF',
+        backgroundGradientFrom: '#FFFFFF',
+        backgroundGradientTo: '#FFFFFF',
+        decimalPlaces: 2,
+        color: (opacity = 1) => `rgba(255, 179, 0, ${opacity})`,
+        labelColor: (opacity = 1) => `rgba(80, 80, 80, ${opacity})`,
+        propsForDots: {
+          r: '5',
+          strokeWidth: '2',
+          stroke: '#FFB300',
+        },
+      }}
+      bezier
+      style={styles.chart}
+    />
+  </View>
+</View>
 
   {waterHistory.length === 0 && electricityHistory.length === 0 && (
     <Text style={styles.emptyHistory}>
@@ -746,5 +900,54 @@ goalLabel: {
   color: '#555555',
   marginTop: 10,
   marginBottom: 5,
+},
+analyticsSection: {
+  marginHorizontal: 20,
+  marginTop: 25,
+  marginBottom: 20,
+},
+
+analyticsTitle: {
+  fontSize: 24,
+  fontWeight: 'bold',
+  color: '#174D3A',
+},
+
+analyticsSubtitle: {
+  fontSize: 14,
+  color: '#777',
+  marginTop: 5,
+  marginBottom: 15,
+},
+
+analyticsCard: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 20,
+  padding: 16,
+  marginBottom: 20,
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOpacity: 0.08,
+  shadowRadius: 5,
+  shadowOffset: { width: 0, height: 2 },
+},
+
+analyticsCardTitle: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  color: '#174D3A',
+},
+
+analyticsTotal: {
+  fontSize: 26,
+  fontWeight: 'bold',
+  marginTop: 10,
+  marginBottom: 10,
+  color: '#333',
+},
+
+chart: {
+  borderRadius: 16,
+  marginLeft: -10,
 },
 });
