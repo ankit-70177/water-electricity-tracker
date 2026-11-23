@@ -14,6 +14,8 @@ const [waterUsage, setWaterUsage] = useState(60);
 const [electricityUsage, setElectricityUsage] = useState(2.4);
 const [waterInput, setWaterInput] = useState('');
 const [electricityInput, setElectricityInput] = useState('');
+const [waterHistory, setWaterHistory] = useState([]);
+const [electricityHistory, setElectricityHistory] = useState([]);
 
 const waterGoal = 150;
 const electricityGoal = 5;
@@ -98,13 +100,26 @@ const remainingElectricity = electricityGoal - electricityUsage;
   <Pressable
     style={styles.addButton}
     onPress={() => {
-      const amount = Number(waterInput);
+  const amount = Number(waterInput);
 
-      if (amount > 0) {
-        setWaterUsage(waterUsage + amount);
-        setWaterInput('');
-      }
-    }}
+  if (amount > 0) {
+    setWaterUsage(waterUsage + amount);
+
+    setWaterHistory([
+      {
+        id: Date.now(),
+        amount: amount,
+        time: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      },
+      ...waterHistory,
+    ]);
+
+    setWaterInput('');
+  }
+}}
   >
     <Text style={styles.addButtonText}>+ Add</Text>
   </Pressable>
@@ -154,13 +169,26 @@ const remainingElectricity = electricityGoal - electricityUsage;
   <Pressable
     style={[styles.addButton, { backgroundColor: '#D89B26' }]}
     onPress={() => {
-      const amount = Number(electricityInput);
+  const amount = Number(electricityInput);
 
-      if (amount > 0) {
-        setElectricityUsage(electricityUsage + amount);
-        setElectricityInput('');
-      }
-    }}
+  if (amount > 0) {
+    setElectricityUsage(electricityUsage + amount);
+
+    setElectricityHistory([
+      {
+        id: Date.now(),
+        amount: amount,
+        time: new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      },
+      ...electricityHistory,
+    ]);
+
+    setElectricityInput('');
+  }
+}}
   >
     <Text style={styles.addButtonText}>+ Add</Text>
   </Pressable>
@@ -199,6 +227,41 @@ const remainingElectricity = electricityGoal - electricityUsage;
             </Text>
           </View>
         </View>
+        <View style={styles.historySection}>
+  <Text style={styles.historyTitle}>Recent Usage 📊</Text>
+
+  {waterHistory.map((entry) => (
+    <View key={entry.id} style={styles.historyItem}>
+      <View>
+        <Text style={styles.historyName}>💧 Water</Text>
+        <Text style={styles.historyAmount}>
+          Added {entry.amount} L
+        </Text>
+      </View>
+
+      <Text style={styles.historyTime}>{entry.time}</Text>
+    </View>
+  ))}
+
+  {electricityHistory.map((entry) => (
+    <View key={entry.id} style={styles.historyItem}>
+      <View>
+        <Text style={styles.historyName}>⚡ Electricity</Text>
+        <Text style={styles.historyAmount}>
+          Added {entry.amount} kWh
+        </Text>
+      </View>
+
+      <Text style={styles.historyTime}>{entry.time}</Text>
+    </View>
+  ))}
+
+  {waterHistory.length === 0 && electricityHistory.length === 0 && (
+    <Text style={styles.emptyHistory}>
+      No usage entries yet. Start tracking your consumption!
+    </Text>
+  )}
+</View>
       </ScrollView>
     </View>
   );
@@ -470,5 +533,52 @@ addButtonText: {
   color: '#FFFFFF',
   fontSize: 14,
   fontWeight: 'bold',
+},
+historySection: {
+  backgroundColor: '#FFFFFF',
+  padding: 20,
+  borderRadius: 20,
+  marginTop: 20,
+  marginBottom: 20,
+},
+
+historyTitle: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  color: '#173C2B',
+  marginBottom: 15,
+},
+
+historyItem: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  paddingVertical: 14,
+  borderBottomWidth: 1,
+  borderBottomColor: '#F0F0F0',
+},
+
+historyName: {
+  fontSize: 15,
+  fontWeight: '600',
+  color: '#173C2B',
+},
+
+historyAmount: {
+  fontSize: 13,
+  color: '#777777',
+  marginTop: 4,
+},
+
+historyTime: {
+  fontSize: 13,
+  color: '#888888',
+},
+
+emptyHistory: {
+  fontSize: 14,
+  color: '#777777',
+  textAlign: 'center',
+  paddingVertical: 15,
 },
 });
