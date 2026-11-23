@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet,
@@ -7,18 +9,78 @@ import {
   TextInput,
   Pressable,
 } from 'react-native';
-import { useState } from 'react';
 
 export default function App() {
 const [waterUsage, setWaterUsage] = useState(60);
 const [electricityUsage, setElectricityUsage] = useState(2.4);
 const [waterInput, setWaterInput] = useState('');
 const [electricityInput, setElectricityInput] = useState('');
+const [waterGoalInput, setWaterGoalInput] = useState('');
+const [electricityGoalInput, setElectricityGoalInput] = useState('');
 const [waterHistory, setWaterHistory] = useState([]);
 const [electricityHistory, setElectricityHistory] = useState([]);
+const [dataLoaded, setDataLoaded] = useState(false);
 
-const waterGoal = 150;
-const electricityGoal = 5;
+const [waterGoal, setWaterGoal] = useState(150);
+const [electricityGoal, setElectricityGoal] = useState(5);
+
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      const savedData = await AsyncStorage.getItem('usageData');
+
+      if (savedData !== null) {
+        const data = JSON.parse(savedData);
+
+        setWaterUsage(data.waterUsage ?? 60);
+        setElectricityUsage(data.electricityUsage ?? 2.4);
+
+        setWaterGoal(data.waterGoal ?? 150);
+        setElectricityGoal(data.electricityGoal ?? 5);
+
+        setWaterHistory(data.waterHistory ?? []);
+        setElectricityHistory(data.electricityHistory ?? []);
+      }
+    } catch (error) {
+      console.log('Error loading data:', error);
+    } finally {
+      setDataLoaded(true);
+    }
+  };
+
+  loadData();
+}, []);
+
+useEffect(() => {
+  if (!dataLoaded) return;
+
+  const saveData = async () => {
+    try {
+      const data = {
+        waterUsage,
+        electricityUsage,
+        waterGoal,
+        electricityGoal,
+        waterHistory,
+        electricityHistory,
+      };
+
+      await AsyncStorage.setItem('usageData', JSON.stringify(data));
+    } catch (error) {
+      console.log('Error saving data:', error);
+    }
+  };
+
+  saveData();
+}, [
+  dataLoaded,
+  waterUsage,
+  electricityUsage,
+  waterGoal,
+  electricityGoal,
+  waterHistory,
+  electricityHistory,
+]);
 
 const waterPercentage = Math.round(
   (waterUsage / waterGoal) * 100
@@ -27,6 +89,23 @@ const waterPercentage = Math.round(
 const electricityPercentage = Math.round(
   (electricityUsage / electricityGoal) * 100
 );
+const waterTip =
+  waterPercentage <= 50
+    ? "Great job! You're using water efficiently. Keep maintaining this habit."
+    : waterPercentage <= 80
+    ? "You're making good progress. Try avoiding unnecessary water usage."
+    : waterPercentage <= 100
+    ? "You're approaching your daily goal. Be mindful of water usage."
+    : "You've exceeded your water goal. Try reducing unnecessary water consumption.";
+
+const electricityTip =
+  electricityPercentage <= 50
+    ? "Excellent! You're keeping electricity consumption low. Keep it up."
+    : electricityPercentage <= 80
+    ? "Good progress! Turn off lights and appliances when not needed."
+    : electricityPercentage <= 100
+    ? "You're approaching your daily electricity goal. Try reducing unnecessary power usage."
+    : "You've exceeded your electricity goal. Switch off unused appliances to reduce consumption.";
 
 const remainingWater = waterGoal - waterUsage;
 const remainingElectricity = electricityGoal - electricityUsage;
@@ -215,17 +294,83 @@ const remainingElectricity = electricityGoal - electricityUsage;
             </Text>
           </View>
 
-          {/* Saving Tip */}
-          <View style={styles.tipCard}>
-            <Text style={styles.tipLabel}>🌱 DAILY SAVING TIP</Text>
+<View style={styles.goalSettingsCard}>
+  <Text style={styles.goalSettingsTitle}>🎯 Daily Goal Settings</Text>
 
-            <Text style={styles.tipTitle}>Save water while brushing</Text>
+  <Text style={styles.goalLabel}>Water Goal (Litres)</Text>
 
-            <Text style={styles.tipDescription}>
-              Turn off the tap while brushing your teeth. A running tap can
-              waste several litres of water in just a few minutes.
-            </Text>
-          </View>
+  <View style={styles.inputRow}>
+    <TextInput
+      style={styles.usageInput}
+      placeholder="Enter water goal"
+      keyboardType="numeric"
+      value={waterGoalInput}
+      onChangeText={setWaterGoalInput}
+    />
+
+    <Pressable
+      style={styles.addButton}
+      onPress={() => {
+        const goal = Number(waterGoalInput);
+
+        if (goal > 0) {
+          setWaterGoal(goal);
+          setWaterGoalInput('');
+        }
+      }}
+    >
+      <Text style={styles.addButtonText}>Update</Text>
+    </Pressable>
+  </View>
+
+  <Text style={styles.goalLabel}>Electricity Goal (kWh)</Text>
+
+  <View style={styles.inputRow}>
+    <TextInput
+      style={styles.usageInput}
+      placeholder="Enter electricity goal"
+      keyboardType="numeric"
+      value={electricityGoalInput}
+      onChangeText={setElectricityGoalInput}
+    />
+
+    <Pressable
+      style={[styles.addButton, { backgroundColor: '#D89B26' }]}
+      onPress={() => {
+        const goal = Number(electricityGoalInput);
+
+        if (goal > 0) {
+          setElectricityGoal(goal);
+          setElectricityGoalInput('');
+        }
+      }}
+    >
+      <Text style={styles.addButtonText}>Update</Text>
+    </Pressable>
+  </View>
+</View>
+
+          {/* Water Saving Tip */}
+<View style={styles.tipCard}>
+  <Text style={styles.tipLabel}>💧 WATER SAVING TIP</Text>
+
+  <Text style={styles.tipTitle}>Save Water</Text>
+
+  <Text style={styles.tipDescription}>
+    {waterTip}
+  </Text>
+</View>
+
+{/* Electricity Saving Tip */}
+<View style={styles.tipCard}>
+  <Text style={styles.tipLabel}>⚡ ENERGY SAVING TIP</Text>
+
+  <Text style={styles.tipTitle}>Save Electricity</Text>
+
+  <Text style={styles.tipDescription}>
+    {electricityTip}
+  </Text>
+</View>
         </View>
         <View style={styles.historySection}>
   <Text style={styles.historyTitle}>Recent Usage 📊</Text>
@@ -580,5 +725,26 @@ emptyHistory: {
   color: '#777777',
   textAlign: 'center',
   paddingVertical: 15,
+},
+goalSettingsCard: {
+  backgroundColor: '#FFFFFF',
+  padding: 20,
+  borderRadius: 20,
+  marginTop: 20,
+},
+
+goalSettingsTitle: {
+  fontSize: 18,
+  fontWeight: 'bold',
+  color: '#173C2B',
+  marginBottom: 15,
+},
+
+goalLabel: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#555555',
+  marginTop: 10,
+  marginBottom: 5,
 },
 });
