@@ -1,10 +1,4 @@
-
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
@@ -78,10 +72,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Logout the current user
-  const logout = async () => {
-    await SecureStore.deleteItemAsync('authToken');
-    setUser(null);
-  };
+const logout = useCallback(async () => {
+  await SecureStore.deleteItemAsync('authToken');
+  setUser(null);
+}, []);
 
   return (
     <AuthContext.Provider

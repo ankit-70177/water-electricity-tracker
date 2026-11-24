@@ -1,6 +1,6 @@
 import { LineChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -31,10 +31,12 @@ const mapBackendRecord = (record, type) => ({
   id: record.id,
   amount: Number(record.amount),
   date: record.usage_date,
-  time: new Date(record.created_at).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
+  time: record.created_at
+    ? new Date(record.created_at).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '',
   type, // 'water' or 'electricity'
 });
 
@@ -65,6 +67,14 @@ export default function DashboardScreen() {
   const [isAddingElectricity, setIsAddingElectricity] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // ────────────────────────────────────────────────────────
   //  Load goals from AsyncStorage (local preferences only)
@@ -73,7 +83,7 @@ export default function DashboardScreen() {
     const loadGoals = async () => {
       try {
         const savedGoals = await AsyncStorage.getItem('userGoals');
-        if (savedGoals !== null) {
+        if (savedGoals !== null && isMountedRef.current) {
           const goals = JSON.parse(savedGoals);
           setWaterGoal(goals.waterGoal ?? 150);
           setElectricityGoal(goals.electricityGoal ?? 5);
@@ -81,7 +91,9 @@ export default function DashboardScreen() {
       } catch (error) {
         console.log('Error loading goals:', error);
       } finally {
-        setGoalsLoaded(true);
+        if (isMountedRef.current) {
+          setGoalsLoaded(true);
+        }
       }
     };
 
@@ -113,32 +125,69 @@ export default function DashboardScreen() {
   //  Called on mount and after every successful submission
   // ────────────────────────────────────────────────────────
   const fetchDashboardData = useCallback(async () => {
-    setDashboardError('');
+    if (isMountedRef.current) {
+      setDashboardError('');
+    }
 
     try {
-      // Fire all four requests in parallel
+      // Fire all four requests in parallel; allSettled keeps valid data if one endpoint fails
       const [waterTodayRes, elecTodayRes, waterHistRes, elecHistRes] =
-        await Promise.all([
+        await Promise.allSettled([
           api.get('/api/water/today'),
           api.get('/api/electricity/today'),
           api.get('/api/water/history'),
           api.get('/api/electricity/history'),
         ]);
 
-      // Today's totals
-      setWaterUsage(waterTodayRes.data.totalUsage ?? 0);
-      setElectricityUsage(elecTodayRes.data.totalUsage ?? 0);
+      if (!isMountedRef.current) return;
 
-      // History mapped to the format the existing UI expects
-      setWaterHistory(
-        (waterHistRes.data.data ?? []).map((r) => mapBackendRecord(r, 'water'))
+      const settled = [waterTodayRes, elecTodayRes, waterHistRes, elecHistRes];
+
+      // If any endpoint reports unauthorized (401/403), follow AuthContext logout flow
+      const unauthorized = settled.find(
+        (res) =>
+          res.status === 'rejected' &&
+          (res.reason?.response?.status === 401 ||
+            res.reason?.response?.status === 403)
       );
-      setElectricityHistory(
-        (elecHistRes.data.data ?? []).map((r) =>
-          mapBackendRecord(r, 'electricity')
-        )
-      );
+      if (unauthorized) {
+        await logout();
+        return;
+      }
+
+      if (waterTodayRes.status === 'fulfilled') {
+        setWaterUsage(waterTodayRes.value.data.totalUsage ?? 0);
+      }
+      if (elecTodayRes.status === 'fulfilled') {
+        setElectricityUsage(elecTodayRes.value.data.totalUsage ?? 0);
+      }
+      if (waterHistRes.status === 'fulfilled') {
+        setWaterHistory(
+          (waterHistRes.value.data.data ?? []).map((r) =>
+            mapBackendRecord(r, 'water')
+          )
+        );
+      }
+      if (elecHistRes.status === 'fulfilled') {
+        setElectricityHistory(
+          (elecHistRes.value.data.data ?? []).map((r) =>
+            mapBackendRecord(r, 'electricity')
+          )
+        );
+      }
+
+      const firstError = settled.find((res) => res.status === 'rejected');
+      if (firstError) {
+        const err = firstError.reason;
+        console.log('Dashboard fetch error:', err?.message);
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          'Could not load your consumption data. Please check your connection.';
+        setDashboardError(msg);
+      }
     } catch (error) {
+      if (!isMountedRef.current) return;
       console.log('Dashboard fetch error:', error.message);
 
       const msg =
@@ -147,9 +196,11 @@ export default function DashboardScreen() {
         'Could not load your consumption data. Please check your connection.';
       setDashboardError(msg);
     } finally {
-      setIsDashboardLoading(false);
+      if (isMountedRef.current) {
+        setIsDashboardLoading(false);
+      }
     }
-  }, []);
+  }, [logout]);
 
   // ── Fetch data when the dashboard first opens ──
   useEffect(() => {
@@ -174,11 +225,13 @@ export default function DashboardScreen() {
     try {
       await api.post('/api/water', { amount });
 
+      if (!isMountedRef.current) return;
       setWaterInput('');
 
       // Re-fetch authoritative data from backend
       await fetchDashboardData();
     } catch (error) {
+      if (!isMountedRef.current) return;
       console.log('Add water usage error:', error.message);
       const msg =
         error.response?.data?.message ||
@@ -186,7 +239,9 @@ export default function DashboardScreen() {
         'Failed to record water usage on server.';
       Alert.alert('Submission Error', msg);
     } finally {
-      setIsAddingWater(false);
+      if (isMountedRef.current) {
+        setIsAddingWater(false);
+      }
     }
   };
 
@@ -208,11 +263,13 @@ export default function DashboardScreen() {
     try {
       await api.post('/api/electricity', { amount });
 
+      if (!isMountedRef.current) return;
       setElectricityInput('');
 
       // Re-fetch authoritative data from backend
       await fetchDashboardData();
     } catch (error) {
+      if (!isMountedRef.current) return;
       console.log('Add electricity usage error:', error.message);
       const msg =
         error.response?.data?.message ||
@@ -220,7 +277,9 @@ export default function DashboardScreen() {
         'Failed to record electricity usage on server.';
       Alert.alert('Submission Error', msg);
     } finally {
-      setIsAddingElectricity(false);
+      if (isMountedRef.current) {
+        setIsAddingElectricity(false);
+      }
     }
   };
 
