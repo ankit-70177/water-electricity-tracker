@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
@@ -27,7 +28,7 @@ router.post('/register', async (req, res) => {
     });
   }
 
-  if (!email.includes('@')) {
+  if (!EMAIL_REGEX.test(email.trim())) {
     return res.status(400).json({
       success: false,
       message: 'Please provide a valid email address.',
