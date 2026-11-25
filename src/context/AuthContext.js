@@ -11,13 +11,17 @@ export const AuthProvider = ({ children }) => {
 
   // Restore the user's session when the app starts
   useEffect(() => {
+    let isMounted = true;
+
     const restoreSession = async () => {
       try {
         const token = await SecureStore.getItemAsync('authToken');
 
         if (token) {
           const response = await api.get('/api/auth/me');
-          setUser(response.data.user);
+          if (isMounted) {
+            setUser(response.data.user);
+          }
         }
       } catch (error) {
         console.log(
@@ -32,17 +36,25 @@ export const AuthProvider = ({ children }) => {
           (error.response.status === 401 || error.response.status === 403)
         ) {
           await SecureStore.deleteItemAsync('authToken');
-          setUser(null);
-        } else {
+          if (isMounted) {
+            setUser(null);
+          }
+        } else if (isMounted) {
           // Keep the token in SecureStore; do not delete on network errors
           setUser(null);
         }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Register a new user
@@ -72,10 +84,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Logout the current user
-const logout = useCallback(async () => {
-  await SecureStore.deleteItemAsync('authToken');
-  setUser(null);
-}, []);
+  const logout = useCallback(async () => {
+    await SecureStore.deleteItemAsync('authToken');
+    setUser(null);
+  }, []);
 
   return (
     <AuthContext.Provider

@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const API_BASE_URL =
-  'https://certified-extraordinary-rip-thousands.trycloudflare.com';
+  'https://jvc-chubby-intelligent-bringing.trycloudflare.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

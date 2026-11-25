@@ -16,16 +16,6 @@ import {
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const getTodayDate = () => {
-  const date = new Date();
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-};
-
 // Convert a backend history record into the format the existing UI expects
 const mapBackendRecord = (record, type) => ({
   id: record.id,
@@ -684,7 +674,7 @@ export default function DashboardScreen() {
               </View>
 
               <Text style={styles.historyTime}>
-                {entry.date} •{entry.time}
+                {entry.date} • {entry.time}
               </Text>
             </View>
           ))}

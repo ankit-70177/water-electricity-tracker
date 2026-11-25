@@ -4,41 +4,7 @@ const router = express.Router();
 
 const pool = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
-
-// Validate consumption amount
-const isValidAmount = (amount) => {
-  if (
-    amount === null ||
-    amount === undefined ||
-    typeof amount === 'boolean' ||
-    typeof amount === 'object' ||
-    String(amount).trim() === ''
-  ) {
-    return false;
-  }
-
-  return Number.isFinite(Number(amount)) && Number(amount) > 0;
-};
-
-// Validate usage date (optional: if provided, must be a valid YYYY-MM-DD string)
-const isValidDate = (dateStr) => {
-  if (dateStr === undefined) {
-    return true; // Optional: defaults to current date in India timezone
-  }
-
-  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return false;
-  }
-
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const dateObj = new Date(Date.UTC(year, month - 1, day));
-
-  return (
-    dateObj.getUTCFullYear() === year &&
-    dateObj.getUTCMonth() === month - 1 &&
-    dateObj.getUTCDate() === day
-  );
-};
+const { isValidAmount, isValidDate } = require('../utils/validators');
 
 // Add electricity consumption
 router.post('/', authenticateToken, async (req, res) => {
